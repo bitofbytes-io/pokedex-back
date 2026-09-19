@@ -36,7 +36,9 @@ const redisClient = require('../database/redis');
  * /pokemon?id=10&range=20&name=bulb&types=1,10&ability=over
  * */
 router.get('/', (req, res) => {
-  if (!validSearch(req.query)) {
+  const query = Object.assign({}, req.query);
+
+  if (!validSearch(query)) {
     return res.status(404)
         .json({
           'error': 'Invalid search',
@@ -51,7 +53,7 @@ router.get('/', (req, res) => {
         });
   }
 
-  const key = createLookupKey(req.query);
+  const key = createLookupKey(query);
 
   // Check cache if search already exist
   return redisClient.get(key)
@@ -59,35 +61,35 @@ router.get('/', (req, res) => {
         if (result) {
           return res.status(200).json(JSON.parse(result));
         } else {
-          return getPokemon(key, req, res);
+          return getPokemon(key, query, res);
         }
       });
 });
 
-const getPokemon = (key, req, res) => {
+const getPokemon = (key, query, res) => {
   return new Promise((resolve) => resolve())
       .then(() => {
         // If user wants to search by weakness, then get all types that
         // are weak to that searched weakness(es)
-        if (req.query.weaknesses) {
-          return database.db.any(weaknessQuery(req.query.weaknesses));
+        if (query.weaknesses) {
+          return database.db.any(weaknessQuery(query.weaknesses));
         }
       })
       .then((weaknessTypes) => {
         // return empty array if there are no types weak to weaknesses searched
-        if (req.query.weaknesses && weaknessTypes.length === 0) {
+        if (query.weaknesses && weaknessTypes.length === 0) {
           return [];
         }
 
         // If user did search for a weakness, replace weakness search query with
         // types that are weak to the searched weaknesses
         if (weaknessTypes) {
-          req.query.weaknesses = weaknessTypes;
+          query.weaknesses = weaknessTypes;
         }
 
         // search for all pokemon IDs that match the user's requested search
         // parameters
-        return database.db.any(buildQuery(req.query));
+        return database.db.any(buildQuery(query));
       })
       .then((result) => {
         // Peel off just IDs from row
